@@ -215,12 +215,12 @@ if defined SRC_PATH (
 )
 
 REM -----------------------------------------------------------------------
-REM  mona3 + pykd  (auto-install pykd via pip if needed)
-REM  Place mona.py in the same folder as hacker.bat to enable mona3
+REM  mona3 + pykd  (bundled in repo — no internet needed)
+REM  mona.py and pykd/ are included. Python must be installed.
 REM -----------------------------------------------------------------------
 set "MONA_FOUND=0"
 if not exist "!DIR!mona.py" (
-    echo !DIM! [-] mona3    : not found  ^(copy mona.py here to enable^)!RST!
+    echo !DIM! [-] mona3    : mona.py not found!RST!
     goto :skip_mona
 )
 
@@ -230,43 +230,49 @@ echo !BRT! [+] mona3    :!RST! !DIR!mona.py
 REM  Check Python is available
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo !YLW! [*] pykd     : Python not found — mona3 disabled!RST!
+    echo !YLW! [*] pykd     : Python not found — install Python to use mona3!RST!
     set "MONA_FOUND=0"
     goto :skip_mona
 )
 
-REM  Detect Python bitness vs WinDBG bitness
+REM  Detect Python bitness and minor version
 for /f %%b in ('python -c "import struct;print(struct.calcsize(chr(80))*8)"') do set "PY_BITS=%%b"
+for /f %%v in ('python -c "import sys;print(str(sys.version_info.major)+chr(46)+str(sys.version_info.minor))"') do set "PY_VER=%%v"
+
 if not "!PY_BITS!"=="!ARCH!" (
-    echo !YLW! [*] pykd     : Python is x!PY_BITS! but WinDBG is x!ARCH! — arch mismatch!RST!
-    echo !YLW!               Use x!ARCH! Python or launch hacker.bat /!PY_BITS!!RST!
+    echo !YLW! [*] pykd     : Python is x!PY_BITS! but WinDBG is x!ARCH!!RST!
+    echo !YLW!               Tip: use hacker.bat /!PY_BITS! to match your Python!RST!
     set "MONA_FOUND=0"
     goto :skip_mona
 )
 
-REM  Auto-install pykd if not present
-python "!DIR!patch_theme.py" --find-pykd >nul 2>&1
-if errorlevel 1 (
-    echo !YLW! [*] pykd     : not installed — running pip install pykd...!RST!
-    pip install pykd --quiet
-    if errorlevel 1 (
-        echo !RED! [X] pykd     : pip install failed — mona3 disabled!RST!
+REM  Try bundled pykd first (pykd\x<arch>\<pyver>\pykd.pyd)
+set "PYKD="
+set "PYKD_DIR=!DIR!pykd\x!ARCH!"
+if exist "!PYKD_DIR!\!PY_VER!\pykd.pyd" (
+    set "PYKD=!PYKD_DIR!\!PY_VER!\pykd.pyd"
+    echo !CYN! [+] pykd     :!RST! bundled !PY_VER! x!ARCH!
+    REM  Add arch DLL dir to PATH so shared DLLs are found by pykd.pyd
+    set "PATH=!PYKD_DIR!;!PATH!"
+) else (
+    REM  Bundled version not available — fall back to pip-installed
+    echo !YLW! [*] pykd     : Python !PY_VER! not bundled — checking pip...!RST!
+    for /f "delims=" %%p in ('python "!DIR!patch_theme.py" --find-pykd 2^>nul') do set "PYKD=%%p"
+    if not defined PYKD (
+        echo !YLW! [*] pykd     : not found — running pip install pykd...!RST!
+        pip install pykd --quiet
+        for /f "delims=" %%p in ('python "!DIR!patch_theme.py" --find-pykd 2^>nul') do set "PYKD=%%p"
+    )
+    if defined PYKD (
+        echo !CYN! [+] pykd     :!RST! pip !PYKD!
+    ) else (
+        echo !RED! [X] pykd     : could not load pykd — mona3 disabled!RST!
         set "MONA_FOUND=0"
         goto :skip_mona
     )
-    echo !BRT! [+] pykd     : installed!RST!
 )
 
-REM  Find pykd.pyd path in site-packages
-set "PYKD="
-for /f "delims=" %%p in ('python "!DIR!patch_theme.py" --find-pykd 2^>nul') do set "PYKD=%%p"
-if defined PYKD (
-    echo !CYN! [+] pykd     :!RST! !PYKD!
-    python "!DIR!patch_theme.py" --gen-mona "!PYKD!" >nul 2>&1
-) else (
-    echo !YLW! [*] pykd     : could not locate pykd.pyd — using .load pykd!RST!
-    python "!DIR!patch_theme.py" --gen-mona >nul 2>&1
-)
+python "!DIR!patch_theme.py" --gen-mona "!PYKD!" >nul 2>&1
 
 :skip_mona
 

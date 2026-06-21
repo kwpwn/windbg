@@ -2,9 +2,6 @@
 mona_cfg.wds
 session_init.wds
 
-# mona3 script (user supplies their own copy)
-mona.py
-
 # Python cache
 __pycache__/
 *.pyc

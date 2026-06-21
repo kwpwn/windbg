@@ -1,0 +1,2 @@
+pykd/**/*.pyd filter=lfs diff=lfs merge=lfs -text
+pykd/**/*.dll filter=lfs diff=lfs merge=lfs -text
