@@ -1,0 +1,210 @@
+$$
+$$ ================================================================
+$$  HACKER WinDBG Init Script  ::  Matrix Mode v3
+$$  Load: $<"C:\path\to\hacker_init.wds"
+$$  Auto: via hacker.bat  -c "$<\"hacker_init.wds\""
+$$ ================================================================
+
+$$ --- Global debugger settings ---
+n 16
+.enable_unicode 1
+.lines -e
+.symopt+ 0x40
+.symopt+ 0x100
+
+$$ ================================================================
+$$  EVENT HANDLERS - auto multi-panel display on every break
+$$ ================================================================
+
+$$  Initial break/attach — show full dashboard
+sxe -c ".echo; .echo ╔══[ REGISTERS ]════════════════════════════════════════════╗; r; .echo ╔══[ CALL STACK ]═══════════════════════════════════════════╗; kn 30; .echo ╔══[ DISASSEMBLY ]══════════════════════════════════════════╗; ub @$ip L5; u @$ip L12; .echo ╚═══════════════════════════════════════════════════════════╝" ibp
+
+$$  Access violation — registers + stack + memory at fault addr
+sxe -c ".echo; .echo ╔══[ !! ACCESS VIOLATION !! ]═══════════════════════════════╗; r; .echo ╔══[ CALL STACK ]═══════════════════════════════════════════╗; kn 25; .echo ╔══[ FAULT ADDRESS INFO ]═══════════════════════════════════╗; .echo --- Exception record ---; .exr -1; .echo --- Memory region ---; !address @$ip; .echo ╚═══════════════════════════════════════════════════════════╝" av
+
+$$  Illegal instruction
+sxe -c ".echo; .echo ╔══[ !! ILLEGAL INSTRUCTION !! ]════════════════════════════╗; r; .echo ╔══[ CALL STACK ]═══════════════════════════════════════════╗; kn 25; .echo ╔══[ DISASSEMBLY @ FAULT ]══════════════════════════════════╗; ub @$ip L3; u @$ip L8; .echo ╚═══════════════════════════════════════════════════════════╝" ii
+
+$$  Stack overflow
+sxe -c ".echo; .echo ╔══[ !! STACK OVERFLOW !! ]═════════════════════════════════╗; r; .echo ╔══[ CALL STACK (top 30) ]══════════════════════════════════╗; kn 30; .echo ╔══[ STACK MEMORY ]═════════════════════════════════════════╗; dps @$csp L20; .echo ╚═══════════════════════════════════════════════════════════╝" sov
+
+$$  Breakpoint hit (bp/ba) — lightweight context
+sxe -c ".echo; .echo ── bp hit ──; r; .echo; kn 15" bpe
+
+$$ ================================================================
+$$  CALLSTACK DISPLAY  (aliases: stk / stkf / stkv / stkn / stkc)
+$$ ================================================================
+
+$$  Standard numbered callstack (most useful)
+as stk  "kn 30"
+$$  With full parameters (verbose)
+as stkf "kP 25"
+$$  With frame-local variables
+as stkv "kv 25"
+$$  Compact — one line per frame (name only)
+as stkc "kc 40"
+$$  All threads callstack
+as stka "~* kn 15"
+$$  Current thread stack memory
+as stkm "dps @$csp L40"
+
+$$ ================================================================
+$$  FULL DASHBOARD  (type: dash  or  ctx)
+$$  Simulates a multi-panel IDE view in the command window
+$$ ================================================================
+
+as dash ".echo; .echo ╔══════════════════════════════════════════════════════════════╗; .echo ║  H4CK3R WinDBG Dashboard                                    ║; .echo ╠══[ REGISTERS ]═══════════════════════════════════════════════╣; r; .echo ╠══[ CALL STACK ]══════════════════════════════════════════════╣; kn 25; .echo ╠══[ DISASSEMBLY ]═════════════════════════════════════════════╣; ub @$ip L5; u @$ip L12; .echo ╠══[ STACK MEMORY ]════════════════════════════════════════════╣; dps @$csp L10; .echo ╠══[ THREAD INFO ]═════════════════════════════════════════════╣; ~; .echo ╠══[ MODULES ]═════════════════════════════════════════════════╣; lm; .echo ╚══════════════════════════════════════════════════════════════╝"
+
+$$  Alias: ctx (backwards-compat)
+as ctx "dash"
+
+$$  Focused panels
+as regs  "r"
+as regs64 "r rax, rbx, rcx, rdx, rsi, rdi, rsp, rbp, rip, rflags, cs, ss, ds, es, fs, gs"
+as regs32 "r eax, ebx, ecx, edx, esi, edi, esp, ebp, eip, efl, cs, ss, ds, es, fs, gs"
+
+$$ ================================================================
+$$  DISASSEMBLY
+$$ ================================================================
+
+as da   "u @$ip L20"
+as dab  "ub @$ip L10"
+as daf  "uf /c"
+as dafn "uf"
+
+$$ ================================================================
+$$  MEMORY INSPECTION
+$$ ================================================================
+
+as dq   "dqs"
+as dp   "dps"
+as dd   "dds"
+as db   "db"
+as da2  "da"
+as dw   "du"
+as dhex "dyb"
+
+$$ ================================================================
+$$  EXCEPTION / SEH INSPECTION
+$$ ================================================================
+
+as xcpt    ".exr -1"
+as xcptctx ".exr -1; .cxr -1; r"
+as seh     "!exchain"
+as xcptall ".exr -1; .echo; .cxr -1; .echo; !exchain"
+
+$$ ================================================================
+$$  PROCESS / THREAD
+$$ ================================================================
+
+as threads  "~"
+as thall    "~* kn 10"
+as thswitch "~s"
+as peb      ".peb"
+as teb      ".teb"
+as cmdline  "!peb; .echo"
+
+$$ ================================================================
+$$  MODULE / SYMBOL INFO
+$$ ================================================================
+
+as mods    "lm"
+as modsv   "lmv"
+as modsfind "lm m"
+as sym     "x"
+as sympath ".sympath"
+as reload  ".reload /f"
+
+$$ ================================================================
+$$  HEAP ANALYSIS
+$$ ================================================================
+
+as heaps   "!heap -s"
+as heapv   "!heap -a"
+as heapl   "!heap -l"
+as heapf   "!heap -flt s"
+
+$$ ================================================================
+$$  PE HEADER / IMPORT / EXPORT
+$$ ================================================================
+
+as pehdr "!dh -f"
+as iat   "!dh -i"
+as eat   "!dh -e"
+as nthdrs ".formats"
+
+$$ ================================================================
+$$  SECURITY / EXPLOIT ANALYSIS
+$$ ================================================================
+
+$$  Find RET gadgets
+as rop32   "s -b 0 L?7fffffff c3"
+as rop64   "s -b 0 L?7fffffffffff c3"
+$$  Pattern / byte search
+as pat     "s -b 0 L?80000000"
+$$  Stack cookie (x86 — adjust offset for x64: +0x28)
+as cookie  "dd poi(@$peb+0x18)+0x14 L1"
+as safeseh "!safeseh"
+$$  Virtual memory info
+as vainfo  "!address"
+as prot    "!vprot"
+$$  TEB / PEB chain
+as chain   "? poi"
+
+$$ ================================================================
+$$  POINTER DEREFS
+$$ ================================================================
+
+as dp8   "dps"
+as dp4   "dds"
+as dp1   "db"
+as dstr  "da"
+as dwstr "du"
+
+$$ ================================================================
+$$  BREAKPOINT HELPERS  (type address after alias)
+$$ ================================================================
+
+$$  Log-and-continue breakpoints — paste full command manually:
+$$    bp kernel32!LoadLibraryA ".echo [+] LoadLibraryA; da poi(@esp+4) L80; g"
+$$    bp kernel32!VirtualAllocEx ".echo [+] VirtualAllocEx; r ecx, edx; g"
+$$    ba w4 <addr>  ".echo [+] memory write at <addr>; r; k 10; g"
+
+$$ ================================================================
+$$  STARTUP BANNER
+$$ ================================================================
+
+.echo .
+.echo ╔══════════════════════════════════════════════════════════════╗
+.echo ║         H4CK3R WinDBG  ::  Matrix Mode v3                   ║
+.echo ╠══════════════════════════════════════════════════════════════╣
+.echo ║  DASHBOARD                                                   ║
+.echo ║    dash / ctx    full panel: regs + stack + disasm + mem     ║
+.echo ║                                                              ║
+.echo ║  CALL STACK                                                  ║
+.echo ║    stk           numbered frames (kn 30)                     ║
+.echo ║    stkf          with parameters (kP 25)                     ║
+.echo ║    stkv          with locals     (kv 25)                     ║
+.echo ║    stkc          compact 1-liner (kc 40)                     ║
+.echo ║    stka          ALL threads stack                           ║
+.echo ║    stkm          stack memory (dps rsp)                      ║
+.echo ║                                                              ║
+.echo ║  REGISTERS                                                   ║
+.echo ║    regs          all registers                               ║
+.echo ║    regs32        x86 regs       regs64  x64 regs            ║
+.echo ║                                                              ║
+.echo ║  DISASSEMBLY                                                 ║
+.echo ║    da / dab      forward / backward    daf  full function    ║
+.echo ║                                                              ║
+.echo ║  EXCEPTION                                                   ║
+.echo ║    xcpt / xcptctx / seh / xcptall                            ║
+.echo ║                                                              ║
+.echo ║  MODULE / HEAP / PE                                          ║
+.echo ║    mods modsv  heaps heapv heapl  pehdr iat eat             ║
+.echo ║                                                              ║
+.echo ║  EXPLOIT                                                     ║
+.echo ║    rop32 rop64  cookie safeseh  vainfo prot  chain          ║
+.echo ║                                                              ║
+.echo ║  Auto-display on: ibp av ii sov bpe                         ║
+.echo ╚══════════════════════════════════════════════════════════════╝
+.echo .
