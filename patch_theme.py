@@ -202,8 +202,29 @@ def gen_mona_cfg(script_dir: str, pykd_path: str = '') -> str:
 # Entry point
 # ---------------------------------------------------------------------------
 
+def find_pykd() -> str:
+    """Return absolute path to pykd.pyd installed via pip, or '' if not found."""
+    try:
+        import importlib.util
+        spec = importlib.util.find_spec('pykd')
+        if spec is None:
+            return ''
+        pkg_dir = os.path.dirname(spec.origin)
+        candidate = os.path.join(pkg_dir, 'pykd.pyd')
+        return candidate if os.path.exists(candidate) else ''
+    except Exception:
+        return ''
+
+
 def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
+
+    if len(sys.argv) >= 2 and sys.argv[1] == '--find-pykd':
+        path = find_pykd()
+        if path:
+            print(path)
+            sys.exit(0)
+        sys.exit(1)
 
     if len(sys.argv) >= 2 and sys.argv[1] == '--gen-mona':
         pykd = sys.argv[2] if len(sys.argv) > 2 else ''

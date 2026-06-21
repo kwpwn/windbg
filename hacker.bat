@@ -215,39 +215,60 @@ if defined SRC_PATH (
 )
 
 REM -----------------------------------------------------------------------
-REM  mona3 detection and pykd loader
-REM  Place mona.py in the same folder as hacker.bat to enable
+REM  mona3 + pykd  (auto-install pykd via pip if needed)
+REM  Place mona.py in the same folder as hacker.bat to enable mona3
 REM -----------------------------------------------------------------------
 set "MONA_FOUND=0"
-if exist "!DIR!mona.py" (
-    set "MONA_FOUND=1"
-    echo !BRT! [+] mona3    :!RST! !DIR!mona.py
-
-    REM  Find pykd.dll for the selected architecture
-    set "PYKD="
-    for %%P in (
-        "E:\Windows Kits\10\Debuggers\x!ARCH!\winext\pykd.dll"
-        "D:\Windows Kits\10\Debuggers\x!ARCH!\winext\pykd.dll"
-        "C:\Program Files (x86)\Windows Kits\10\Debuggers\x!ARCH!\winext\pykd.dll"
-        "C:\Program Files\Windows Kits\10\Debuggers\x!ARCH!\winext\pykd.dll"
-        "C:\pykd\pykd.dll"
-        "C:\Tools\pykd\pykd.dll"
-    ) do (
-        if not defined PYKD (
-            if exist %%P set "PYKD=%%~P"
-        )
-    )
-
-    if defined PYKD (
-        echo !CYN! [+] pykd     :!RST! !PYKD!
-        python "!DIR!patch_theme.py" --gen-mona "!PYKD!" >nul 2>&1
-    ) else (
-        echo !YLW! [*] pykd     : not found in WDK paths — using .load pykd (must be in ext path)!RST!
-        python "!DIR!patch_theme.py" --gen-mona >nul 2>&1
-    )
-) else (
-    echo !DIM! [-] mona3    : not found  (copy mona.py here to enable)!RST!
+if not exist "!DIR!mona.py" (
+    echo !DIM! [-] mona3    : not found  ^(copy mona.py here to enable^)!RST!
+    goto :skip_mona
 )
+
+set "MONA_FOUND=1"
+echo !BRT! [+] mona3    :!RST! !DIR!mona.py
+
+REM  Check Python is available
+python --version >nul 2>&1
+if errorlevel 1 (
+    echo !YLW! [*] pykd     : Python not found — mona3 disabled!RST!
+    set "MONA_FOUND=0"
+    goto :skip_mona
+)
+
+REM  Detect Python bitness vs WinDBG bitness
+for /f %%b in ('python -c "import struct;print(struct.calcsize(chr(80))*8)"') do set "PY_BITS=%%b"
+if not "!PY_BITS!"=="!ARCH!" (
+    echo !YLW! [*] pykd     : Python is x!PY_BITS! but WinDBG is x!ARCH! — arch mismatch!RST!
+    echo !YLW!               Use x!ARCH! Python or launch hacker.bat /!PY_BITS!!RST!
+    set "MONA_FOUND=0"
+    goto :skip_mona
+)
+
+REM  Auto-install pykd if not present
+python "!DIR!patch_theme.py" --find-pykd >nul 2>&1
+if errorlevel 1 (
+    echo !YLW! [*] pykd     : not installed — running pip install pykd...!RST!
+    pip install pykd --quiet
+    if errorlevel 1 (
+        echo !RED! [X] pykd     : pip install failed — mona3 disabled!RST!
+        set "MONA_FOUND=0"
+        goto :skip_mona
+    )
+    echo !BRT! [+] pykd     : installed!RST!
+)
+
+REM  Find pykd.pyd path in site-packages
+set "PYKD="
+for /f "delims=" %%p in ('python "!DIR!patch_theme.py" --find-pykd 2^>nul') do set "PYKD=%%p"
+if defined PYKD (
+    echo !CYN! [+] pykd     :!RST! !PYKD!
+    python "!DIR!patch_theme.py" --gen-mona "!PYKD!" >nul 2>&1
+) else (
+    echo !YLW! [*] pykd     : could not locate pykd.pyd — using .load pykd!RST!
+    python "!DIR!patch_theme.py" --gen-mona >nul 2>&1
+)
+
+:skip_mona
 
 REM -----------------------------------------------------------------------
 REM  Build session_init.wds  (chains hacker_init + mona_cfg if present)
