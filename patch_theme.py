@@ -8,9 +8,11 @@ The WDWS workspace binary embeds color entries with this exact header:
 Only bytes at those offsets are patched — no false positives on binary data.
 
 Usage:
-    python patch_theme.py                      # dark.wew -> hacker.wew (same dir)
+    python patch_theme.py                       # dark.wew -> hacker.wew (same dir)
     python patch_theme.py in.wew out.wew
     python patch_theme.py in.reg  out.reg
+    python patch_theme.py --gen-mona            # generate mona_cfg.wds (no pykd path)
+    python patch_theme.py --gen-mona pykd.dll   # generate mona_cfg.wds with explicit pykd
 """
 
 import sys
@@ -18,11 +20,6 @@ import os
 
 # ---------------------------------------------------------------------------
 # HACKER COLOR PALETTE  (R, G, B)  →  (R, G, B)
-#
-# Design goals:
-#   • Pure black background (nền đen)
-#   • Softer terminal green — not blinding (P39 phosphor CRT style)
-#   • High contrast for important elements (addresses, errors, changed regs)
 # ---------------------------------------------------------------------------
 
 COLOR_MAP = {
@@ -31,7 +28,6 @@ COLOR_MAP = {
     (0x52, 0x54, 0x58): (0x00, 0x40, 0x00),  # panel color   → #004000 dim green panel
 
     # ── Primary text → SOFT TERMINAL GREEN ───────────────────────────────────
-    # CRT P39 phosphor green sits around #00B800. Not blinding, very readable.
     (0xCF, 0xCE, 0x9A): (0x00, 0xB8, 0x00),  # main text     → #00B800 CRT green
     (0xF8, 0xF8, 0xF8): (0x00, 0xE0, 0x00),  # highlight     → #00E000 brighter green
     (0x6F, 0x6D, 0x7E): (0x00, 0x88, 0x00),  # secondary     → #008800 medium green
@@ -54,31 +50,26 @@ COLOR_MAP = {
     (0xE6, 0x1E, 0x3C): (0xFF, 0x00, 0x55),  # crimson       → #FF0055
 }
 
-# Black entries in color slots are structurally ambiguous (FG or BG).
-# Odd-numbered color IDs are backgrounds  → keep pure black
-# Even-numbered color IDs may be foreground → use dim green so text stays readable
-# (Only affects IDs 0x0000 which is workspace BG-ish; all others mapped above)
-BLACK_EVEN_ID = (0x00, 0x30, 0x00)  # #003000 — barely visible as FG, invisible as BG
-BLACK_ODD_ID  = (0x00, 0x00, 0x00)  # #000000 — pure black (confirmed backgrounds)
+# Black entries in color slots: odd IDs = backgrounds (keep black),
+# even IDs may be foreground (use dim green so text stays visible)
+BLACK_EVEN_ID = (0x00, 0x30, 0x00)
+BLACK_ODD_ID  = (0x00, 0x00, 0x00)
 
 
 # ---------------------------------------------------------------------------
 # WDWS structure-aware scanner
-# Each color entry has header:  [ID_LO][ID_HI] 02 00 10 00 04 00
-# followed by:                  [R][G][B] 00  00 00 00 00
 # ---------------------------------------------------------------------------
 
 ENTRY_HEADER = bytes([0x02, 0x00, 0x10, 0x00, 0x04, 0x00])
 
 def find_color_entries(data: bytearray):
-    """Return list of (color_byte_offset, color_id, r, g, b) for every WDWS color entry."""
     entries = []
     for i in range(len(data) - 12):
         if data[i + 2: i + 8] == ENTRY_HEADER:
             cid = (data[i + 1] << 8) | data[i]
             r, g, b, a = data[i + 8], data[i + 9], data[i + 10], data[i + 11]
             if a == 0x00:
-                entries.append((i + 8, cid, r, g, b))   # i+8 = offset of R byte
+                entries.append((i + 8, cid, r, g, b))
     return entries
 
 
@@ -97,8 +88,6 @@ def patch_wew(src: str, dst: str) -> int:
         if (r, g, b) in COLOR_MAP:
             nr, ng, nb = COLOR_MAP[(r, g, b)]
         elif r == 0 and g == 0 and b == 0:
-            # Black in a color slot — odd IDs are backgrounds (keep black),
-            # even IDs may be foreground text (use dim green to stay visible)
             nr, ng, nb = BLACK_ODD_ID if (cid % 2 == 1) else BLACK_EVEN_ID
         else:
             continue
@@ -115,7 +104,7 @@ def patch_wew(src: str, dst: str) -> int:
 
 
 # ---------------------------------------------------------------------------
-# .reg patcher  (UTF-16 LE, text-based hex: values)
+# .reg patcher  (UTF-16 LE)
 # ---------------------------------------------------------------------------
 
 def patch_reg(src: str, dst: str) -> int:
@@ -131,7 +120,7 @@ def patch_reg(src: str, dst: str) -> int:
 
     replaced = 0
     full_map = dict(COLOR_MAP)
-    full_map[(0x00, 0x00, 0x00)] = BLACK_EVEN_ID   # in .reg can't tell FG/BG parity — use dim green (safe)
+    full_map[(0x00, 0x00, 0x00)] = BLACK_EVEN_ID
 
     for (old_r, old_g, old_b), (new_r, new_g, new_b) in full_map.items():
         if (old_r, old_g, old_b) == (new_r, new_g, new_b):
@@ -149,11 +138,78 @@ def patch_reg(src: str, dst: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# mona3 loader generator
+# Writes mona_cfg.wds that loads pykd and sets up all mona aliases.
+# Called by hacker.bat when mona.py is found in the script directory.
+# ---------------------------------------------------------------------------
+
+def gen_mona_cfg(script_dir: str, pykd_path: str = '') -> str:
+    mona_py = os.path.join(script_dir, 'mona.py')
+    out_path = os.path.join(script_dir, 'mona_cfg.wds')
+
+    if pykd_path and os.path.exists(pykd_path):
+        load_line = f'.load "{pykd_path}"'
+    else:
+        load_line = '.load pykd'
+
+    mp = mona_py
+
+    lines = [
+        '$$ mona_cfg.wds -- auto-generated by patch_theme.py\n',
+        '$$ Do not edit -- regenerated each launch when mona.py is present\n',
+        '$$\n',
+        '$$ Requires: pykd WinDBG extension\n',
+        '$$   Install: https://githubfast.com/corelan/mona or pip install pykd\n',
+        '$$\n',
+        f'{load_line}\n',
+        '$$\n',
+        f'as mona     !py "{mp}"\n',
+        f'as monarop  !py "{mp}" rop\n',
+        f'as monapat  !py "{mp}" pattern_create\n',
+        f'as monaoff  !py "{mp}" pattern_offset\n',
+        f'as monafind !py "{mp}" find\n',
+        f'as monaseh  !py "{mp}" seh\n',
+        f'as monamod  !py "{mp}" modules\n',
+        f'as monajop  !py "{mp}" jop\n',
+        f'as monasug  !py "{mp}" suggest\n',
+        f'as monaheap !py "{mp}" heap\n',
+        f'as monacmp  !py "{mp}" compare\n',
+        f'as monainfo !py "{mp}" info\n',
+        '$$\n',
+        '.echo .\n',
+        '.echo ╔══[ mona3 loaded ]════════════════════════════════════════════╗\n',
+        '.echo ║  mona <cmd>        run any mona command                      ║\n',
+        '.echo ║  monarop           find ROP gadgets in all modules            ║\n',
+        '.echo ║  monapat <len>     create cyclic pattern                      ║\n',
+        '.echo ║  monaoff <val>     find offset in cyclic pattern              ║\n',
+        '.echo ║  monafind <args>   find bytes/strings/pointers in memory      ║\n',
+        '.echo ║  monaseh           analyze SEH chain                          ║\n',
+        '.echo ║  monasug           suggest ROP chains (ASLR/DEP bypass)       ║\n',
+        '.echo ║  monamod           module info (ASLR/SafeSEH/NX/RELRO)        ║\n',
+        '.echo ║  monaheap          heap analysis                               ║\n',
+        '.echo ║  mona -h           full mona help                              ║\n',
+        '.echo ╚══════════════════════════════════════════════════════════════╝\n',
+        '.echo .\n',
+    ]
+
+    with open(out_path, 'w', encoding='utf-8') as f:
+        f.writelines(lines)
+
+    return out_path
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
 def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
+
+    if len(sys.argv) >= 2 and sys.argv[1] == '--gen-mona':
+        pykd = sys.argv[2] if len(sys.argv) > 2 else ''
+        out = gen_mona_cfg(script_dir, pykd)
+        print(f'[+] Generated {out}')
+        sys.exit(0)
 
     if len(sys.argv) == 3:
         src, dst = sys.argv[1], sys.argv[2]
@@ -161,7 +217,11 @@ def main():
         src = os.path.join(script_dir, 'dark.wew')
         dst = os.path.join(script_dir, 'hacker.wew')
     else:
-        print('Usage: patch_theme.py [input.wew|input.reg] [output.wew|output.reg]')
+        print('Usage:')
+        print('  patch_theme.py                       dark.wew -> hacker.wew')
+        print('  patch_theme.py in.wew out.wew')
+        print('  patch_theme.py in.reg  out.reg')
+        print('  patch_theme.py --gen-mona [pykd.dll] generate mona_cfg.wds')
         sys.exit(1)
 
     if not os.path.exists(src):

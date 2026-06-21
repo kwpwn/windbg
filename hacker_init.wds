@@ -1,8 +1,7 @@
 $$
 $$ ================================================================
-$$  HACKER WinDBG Init Script  ::  Matrix Mode v3
-$$  Load: $<"C:\path\to\hacker_init.wds"
-$$  Auto: via hacker.bat  -c "$<\"hacker_init.wds\""
+$$  HACKER WinDBG Init Script  ::  Matrix Mode v4
+$$  Auto-loaded via hacker.bat  -c "$<\"session_init.wds\""
 $$ ================================================================
 
 $$ --- Global debugger settings ---
@@ -13,58 +12,72 @@ n 16
 .symopt+ 0x100
 
 $$ ================================================================
-$$  EVENT HANDLERS - auto multi-panel display on every break
+$$  BREAK EVENT HANDLERS
+$$  Valid sxe events used: ibp av dz gp ii sov eh
 $$ ================================================================
 
-$$  Initial break/attach — show full dashboard
+$$  Initial break on attach/launch — regs + stack + disasm
 sxe -c ".echo; .echo ╔══[ REGISTERS ]════════════════════════════════════════════╗; r; .echo ╔══[ CALL STACK ]═══════════════════════════════════════════╗; kn 30; .echo ╔══[ DISASSEMBLY ]══════════════════════════════════════════╗; ub @$ip L5; u @$ip L12; .echo ╚═══════════════════════════════════════════════════════════╝" ibp
 
-$$  Access violation — registers + stack + memory at fault addr
-sxe -c ".echo; .echo ╔══[ !! ACCESS VIOLATION !! ]═══════════════════════════════╗; r; .echo ╔══[ CALL STACK ]═══════════════════════════════════════════╗; kn 25; .echo ╔══[ FAULT ADDRESS INFO ]═══════════════════════════════════╗; .echo --- Exception record ---; .exr -1; .echo --- Memory region ---; !address @$ip; .echo ╚═══════════════════════════════════════════════════════════╝" av
+$$  Access violation — exception record + regs + stack + fault addr
+sxe -c ".echo; .echo ╔══[ !! ACCESS VIOLATION !! ]═══════════════════════════════╗; .exr -1; .echo ╔══[ REGISTERS ]════════════════════════════════════════════╗; r; .echo ╔══[ CALL STACK ]═══════════════════════════════════════════╗; kn 25; .echo ╔══[ FAULT ADDRESS ]════════════════════════════════════════╗; !address @$ip; .echo ╚═══════════════════════════════════════════════════════════╝" av
+
+$$  Divide by zero
+sxe -c ".echo; .echo ╔══[ !! DIVIDE BY ZERO !! ]═════════════════════════════════╗; r; .echo ╔══[ CALL STACK ]═══════════════════════════════════════════╗; kn 25; .echo ╚═══════════════════════════════════════════════════════════╝" dz
+
+$$  General protection fault
+sxe -c ".echo; .echo ╔══[ !! GENERAL PROTECTION FAULT !! ]═══════════════════════╗; r; .echo ╔══[ CALL STACK ]═══════════════════════════════════════════╗; kn 25; .echo ╔══[ DISASSEMBLY @ FAULT ]══════════════════════════════════╗; ub @$ip L3; u @$ip L8; .echo ╚═══════════════════════════════════════════════════════════╝" gp
 
 $$  Illegal instruction
 sxe -c ".echo; .echo ╔══[ !! ILLEGAL INSTRUCTION !! ]════════════════════════════╗; r; .echo ╔══[ CALL STACK ]═══════════════════════════════════════════╗; kn 25; .echo ╔══[ DISASSEMBLY @ FAULT ]══════════════════════════════════╗; ub @$ip L3; u @$ip L8; .echo ╚═══════════════════════════════════════════════════════════╝" ii
 
 $$  Stack overflow
-sxe -c ".echo; .echo ╔══[ !! STACK OVERFLOW !! ]═════════════════════════════════╗; r; .echo ╔══[ CALL STACK (top 30) ]══════════════════════════════════╗; kn 30; .echo ╔══[ STACK MEMORY ]═════════════════════════════════════════╗; dps @$csp L20; .echo ╚═══════════════════════════════════════════════════════════╝" sov
+sxe -c ".echo; .echo ╔══[ !! STACK OVERFLOW !! ]═════════════════════════════════╗; r; .echo ╔══[ CALL STACK ]═══════════════════════════════════════════╗; kn 30; .echo ╔══[ STACK MEMORY ]═════════════════════════════════════════╗; dps @$csp L20; .echo ╚═══════════════════════════════════════════════════════════╝" sov
 
-$$  Breakpoint hit (bp/ba) — lightweight context
-sxe -c ".echo; .echo ── bp hit ──; r; .echo; kn 15" bpe
+$$  Unhandled C++ / CLR exception
+sxe -c ".echo; .echo ╔══[ !! C++ EXCEPTION !! ]══════════════════════════════════╗; .exr -1; .echo ╔══[ CALL STACK ]═══════════════════════════════════════════╗; kn 25; .echo ╚═══════════════════════════════════════════════════════════╝" eh
 
 $$ ================================================================
-$$  CALLSTACK DISPLAY  (aliases: stk / stkf / stkv / stkn / stkc)
+$$  DASHBOARD  (type: dash  or  ctx)
+$$  Full multi-panel view in the command window
 $$ ================================================================
 
-$$  Standard numbered callstack (most useful)
+as dash ".echo; .echo ╔══════════════════════════════════════════════════════════════╗; .echo ║  H4CK3R WinDBG Dashboard                                    ║; .echo ╠══[ REGISTERS ]═══════════════════════════════════════════════╣; r; .echo ╠══[ CALL STACK ]══════════════════════════════════════════════╣; kn 25; .echo ╠══[ DISASSEMBLY ]═════════════════════════════════════════════╣; ub @$ip L5; u @$ip L12; .echo ╠══[ STACK MEMORY ]════════════════════════════════════════════╣; dps @$csp L10; .echo ╠══[ THREADS ]═════════════════════════════════════════════════╣; ~; .echo ╠══[ MODULES ]═════════════════════════════════════════════════╣; lm; .echo ╚══════════════════════════════════════════════════════════════╝"
+
+as ctx ".echo; .echo ╔══════════════════════════════════════════════════════════════╗; .echo ║  H4CK3R WinDBG Dashboard                                    ║; .echo ╠══[ REGISTERS ]═══════════════════════════════════════════════╣; r; .echo ╠══[ CALL STACK ]══════════════════════════════════════════════╣; kn 25; .echo ╠══[ DISASSEMBLY ]═════════════════════════════════════════════╣; ub @$ip L5; u @$ip L12; .echo ╠══[ STACK MEMORY ]════════════════════════════════════════════╣; dps @$csp L10; .echo ╠══[ THREADS ]═════════════════════════════════════════════════╣; ~; .echo ╠══[ MODULES ]═════════════════════════════════════════════════╣; lm; .echo ╚══════════════════════════════════════════════════════════════╝"
+
+$$ ================================================================
+$$  CRASH DUMP ANALYSIS
+$$ ================================================================
+
+$$  Full automatic analysis (use after: hacker.bat -z crash.dmp)
+as analyze    "!analyze -v"
+as analyzeq   "!analyze"
+$$  Comprehensive dump report
+as analyzedmp "!analyze -v; .echo; kn 30; .echo; !address -summary; .echo; lm"
+
+$$ ================================================================
+$$  CALL STACK
+$$ ================================================================
+
 as stk  "kn 30"
-$$  With full parameters (verbose)
 as stkf "kP 25"
-$$  With frame-local variables
 as stkv "kv 25"
-$$  Compact — one line per frame (name only)
 as stkc "kc 40"
-$$  All threads callstack
 as stka "~* kn 15"
-$$  Current thread stack memory
 as stkm "dps @$csp L40"
 
 $$ ================================================================
-$$  FULL DASHBOARD  (type: dash  or  ctx)
-$$  Simulates a multi-panel IDE view in the command window
+$$  REGISTERS
 $$ ================================================================
 
-as dash ".echo; .echo ╔══════════════════════════════════════════════════════════════╗; .echo ║  H4CK3R WinDBG Dashboard                                    ║; .echo ╠══[ REGISTERS ]═══════════════════════════════════════════════╣; r; .echo ╠══[ CALL STACK ]══════════════════════════════════════════════╣; kn 25; .echo ╠══[ DISASSEMBLY ]═════════════════════════════════════════════╣; ub @$ip L5; u @$ip L12; .echo ╠══[ STACK MEMORY ]════════════════════════════════════════════╣; dps @$csp L10; .echo ╠══[ THREAD INFO ]═════════════════════════════════════════════╣; ~; .echo ╠══[ MODULES ]═════════════════════════════════════════════════╣; lm; .echo ╚══════════════════════════════════════════════════════════════╝"
-
-$$  Alias: ctx (backwards-compat)
-as ctx "dash"
-
-$$  Focused panels
-as regs  "r"
-as regs64 "r rax, rbx, rcx, rdx, rsi, rdi, rsp, rbp, rip, rflags, cs, ss, ds, es, fs, gs"
+as regs   "r"
 as regs32 "r eax, ebx, ecx, edx, esi, edi, esp, ebp, eip, efl, cs, ss, ds, es, fs, gs"
+as regs64 "r rax, rbx, rcx, rdx, rsi, rdi, rsp, rbp, rip, rflags, cs, ss, ds, es, fs, gs"
 
 $$ ================================================================
 $$  DISASSEMBLY
+$$  daf / dafn take an address arg:  daf ntdll!NtCreateFile
 $$ ================================================================
 
 as da   "u @$ip L20"
@@ -76,16 +89,16 @@ $$ ================================================================
 $$  MEMORY INSPECTION
 $$ ================================================================
 
-as dq   "dqs"
-as dp   "dps"
-as dd   "dds"
-as db   "db"
-as da2  "da"
-as dw   "du"
-as dhex "dyb"
+as dq    "dqs"
+as dp    "dps"
+as dd    "dds"
+as db    "db"
+as dstr  "da"
+as dwstr "du"
+as dhex  "dyb"
 
 $$ ================================================================
-$$  EXCEPTION / SEH INSPECTION
+$$  EXCEPTION / SEH
 $$ ================================================================
 
 as xcpt    ".exr -1"
@@ -99,30 +112,39 @@ $$ ================================================================
 
 as threads  "~"
 as thall    "~* kn 10"
-as thswitch "~s"
 as peb      ".peb"
 as teb      ".teb"
-as cmdline  "!peb; .echo"
+as handles  "!handle"
+as token    "!token -p"
+as cmdline  ".cmdline"
 
 $$ ================================================================
-$$  MODULE / SYMBOL INFO
+$$  MODULE / SYMBOL
 $$ ================================================================
 
-as mods    "lm"
-as modsv   "lmv"
+as mods     "lm"
+as modsv    "lmv"
 as modsfind "lm m"
-as sym     "x"
-as sympath ".sympath"
-as reload  ".reload /f"
+as sym      "x"
+as sympath  ".sympath"
+as reload   ".reload /f"
+
+$$ ================================================================
+$$  MEMORY MAP
+$$ ================================================================
+
+as memmap  "!address -summary"
+as vainfo  "!address"
+as prot    "!vprot"
 
 $$ ================================================================
 $$  HEAP ANALYSIS
 $$ ================================================================
 
-as heaps   "!heap -s"
-as heapv   "!heap -a"
-as heapl   "!heap -l"
-as heapf   "!heap -flt s"
+as heaps  "!heap -s"
+as heapv  "!heap -a"
+as heapl  "!heap -l"
+as heapf  "!heap -flt s"
 
 $$ ================================================================
 $$  PE HEADER / IMPORT / EXPORT
@@ -131,44 +153,69 @@ $$ ================================================================
 as pehdr "!dh -f"
 as iat   "!dh -i"
 as eat   "!dh -e"
-as nthdrs ".formats"
 
 $$ ================================================================
 $$  SECURITY / EXPLOIT ANALYSIS
 $$ ================================================================
 
-$$  Find RET gadgets
+$$  Stack cookie: search across all loaded modules (correct way)
+as cookie  "x *!__security_cookie"
+$$  SafeSEH check per module
+as safeseh "!safeseh"
+$$  RET gadget search (c3 = RET, c2 = RET n)
 as rop32   "s -b 0 L?7fffffff c3"
 as rop64   "s -b 0 L?7fffffffffff c3"
-$$  Pattern / byte search
-as pat     "s -b 0 L?80000000"
-$$  Stack cookie (x86 — adjust offset for x64: +0x28)
-as cookie  "dd poi(@$peb+0x18)+0x14 L1"
-as safeseh "!safeseh"
-$$  Virtual memory info
-as vainfo  "!address"
-as prot    "!vprot"
-$$  TEB / PEB chain
+$$  Generic byte search: append start L<len> <bytes>
+as pat     "s -b"
+$$  Pointer chain dereference
 as chain   "? poi"
 
 $$ ================================================================
-$$  POINTER DEREFS
+$$  KERNEL DEBUGGING  (hacker.bat -k ...)
 $$ ================================================================
 
-as dp8   "dps"
-as dp4   "dds"
-as dp1   "db"
-as dstr  "da"
-as dwstr "du"
+$$  List all processes (brief)
+as kprocs   "!process 0 0"
+$$  Full process info — append: <EPROCESS addr> 0x1f
+as kproc    "!process"
+$$  Current kernel thread
+as kthread  "!thread"
+$$  Running threads per CPU
+as krunning "!running"
+$$  Driver object — append: \Driver\<name>
+as drvobj   "!drvobj"
+$$  Device object — append: <addr>
+as devobj   "!devobj"
+$$  IRP inspection — append: <addr>
+as irp      "!irp"
+$$  Kernel object — append: <addr>
+as kobj     "!object"
+$$  Pool allocation info — append: <addr>
+as pool     "!pool"
+$$  Page table entry — append: <virtual addr>
+as pte      "!pte"
+$$  Processor control region
+as pcr      "!pcr"
+$$  Deadlock / spinlock detection
+as locks    "!locks"
+$$  Critical sections holding locks
+as cs       "!cs -l"
+$$  EPROCESS structure — append: <addr>
+as eproc    "dt nt!_EPROCESS"
+$$  ETHREAD structure — append: <addr>
+as ethread  "dt nt!_ETHREAD"
+$$  Kernel modules only
+as kmods    "lm k"
+$$  IRQL
+as irql     "!irql"
 
 $$ ================================================================
-$$  BREAKPOINT HELPERS  (type address after alias)
+$$  LOGGING  (saves session output to file)
 $$ ================================================================
 
-$$  Log-and-continue breakpoints — paste full command manually:
-$$    bp kernel32!LoadLibraryA ".echo [+] LoadLibraryA; da poi(@esp+4) L80; g"
-$$    bp kernel32!VirtualAllocEx ".echo [+] VirtualAllocEx; r ecx, edx; g"
-$$    ba w4 <addr>  ".echo [+] memory write at <addr>; r; k 10; g"
+as logon   ".logopen /u C:\windbg_log.txt"
+as logoff  ".logclose"
+as logadd  ".logappend /u C:\windbg_log.txt"
 
 $$ ================================================================
 $$  STARTUP BANNER
@@ -176,35 +223,38 @@ $$ ================================================================
 
 .echo .
 .echo ╔══════════════════════════════════════════════════════════════╗
-.echo ║         H4CK3R WinDBG  ::  Matrix Mode v3                   ║
+.echo ║         H4CK3R WinDBG  ::  Matrix Mode v4                   ║
 .echo ╠══════════════════════════════════════════════════════════════╣
 .echo ║  DASHBOARD                                                   ║
-.echo ║    dash / ctx    full panel: regs + stack + disasm + mem     ║
+.echo ║    dash / ctx     regs + stack + disasm + mem + threads      ║
+.echo ║                                                              ║
+.echo ║  CRASH ANALYSIS                                              ║
+.echo ║    analyze        !analyze -v  (use after: -z dump.dmp)      ║
+.echo ║    analyzedmp     full dump report (analyze+stack+memmap)    ║
 .echo ║                                                              ║
 .echo ║  CALL STACK                                                  ║
-.echo ║    stk           numbered frames (kn 30)                     ║
-.echo ║    stkf          with parameters (kP 25)                     ║
-.echo ║    stkv          with locals     (kv 25)                     ║
-.echo ║    stkc          compact 1-liner (kc 40)                     ║
-.echo ║    stka          ALL threads stack                           ║
-.echo ║    stkm          stack memory (dps rsp)                      ║
+.echo ║    stk stkf stkv stkc stka stkm                             ║
 .echo ║                                                              ║
 .echo ║  REGISTERS                                                   ║
-.echo ║    regs          all registers                               ║
-.echo ║    regs32        x86 regs       regs64  x64 regs            ║
+.echo ║    regs  regs32  regs64                                      ║
 .echo ║                                                              ║
-.echo ║  DISASSEMBLY                                                 ║
-.echo ║    da / dab      forward / backward    daf  full function    ║
+.echo ║  EXCEPTION / SEH                                             ║
+.echo ║    xcpt  xcptctx  seh  xcptall                               ║
 .echo ║                                                              ║
-.echo ║  EXCEPTION                                                   ║
-.echo ║    xcpt / xcptctx / seh / xcptall                            ║
+.echo ║  EXPLOIT / RE                                                ║
+.echo ║    cookie  safeseh  rop32  rop64  pat  chain                 ║
+.echo ║    vainfo  prot  memmap  handles  token                      ║
 .echo ║                                                              ║
 .echo ║  MODULE / HEAP / PE                                          ║
 .echo ║    mods modsv  heaps heapv heapl  pehdr iat eat             ║
 .echo ║                                                              ║
-.echo ║  EXPLOIT                                                     ║
-.echo ║    rop32 rop64  cookie safeseh  vainfo prot  chain          ║
+.echo ║  KERNEL                                                      ║
+.echo ║    kprocs kproc kthread krunning drvobj devobj irp           ║
+.echo ║    pte pcr locks cs eproc ethread pool kobj kmods irql       ║
 .echo ║                                                              ║
-.echo ║  Auto-display on: ibp av ii sov bpe                         ║
+.echo ║  LOGGING                                                     ║
+.echo ║    logon  logadd  logoff  (saves to C:\windbg_log.txt)       ║
+.echo ║                                                              ║
+.echo ║  AUTO-DISPLAY on: ibp av dz gp ii sov eh                    ║
 .echo ╚══════════════════════════════════════════════════════════════╝
 .echo .
