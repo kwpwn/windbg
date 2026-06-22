@@ -94,7 +94,7 @@ if "!PREVIEW_MODE!"=="1" (
     echo !CYN! [+] Mode     :!RST! WinDBG Preview
     echo !CYN! [+] Preview  :!RST! !WINDBG_PREVIEW!
     if not defined _NT_SYMBOL_PATH (
-        set "_NT_SYMBOL_PATH=srv*C:\Symbols*https://msdl.microsoft.com/download/symbols"
+        set "_NT_SYMBOL_PATH=srv*!DIR!symbols*https://msdl.microsoft.com/download/symbols"
     )
     if defined SYMBOL_LOCAL set "_NT_SYMBOL_PATH=!SYMBOL_LOCAL!;!_NT_SYMBOL_PATH!"
     echo !CYN! [+] Symbols  :!RST! !_NT_SYMBOL_PATH!
@@ -195,10 +195,12 @@ if not exist "!THEME!" (
 echo !CYN! [+] Theme    :!RST! !THEME!
 
 REM -----------------------------------------------------------------------
-REM  Symbol path
+REM  Symbol path  (local repo cache first, then MS symbol server)
+REM  Pre-downloaded PDBs in symbols\ are used immediately — no internet.
+REM  New symbols are fetched and cached there for reuse.
 REM -----------------------------------------------------------------------
 if not defined _NT_SYMBOL_PATH (
-    set "_NT_SYMBOL_PATH=srv*C:\Symbols*https://msdl.microsoft.com/download/symbols"
+    set "_NT_SYMBOL_PATH=srv*!DIR!symbols*https://msdl.microsoft.com/download/symbols"
 )
 if defined SYMBOL_LOCAL (
     set "_NT_SYMBOL_PATH=!SYMBOL_LOCAL!;!_NT_SYMBOL_PATH!"
